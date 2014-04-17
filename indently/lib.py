@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import re
+
+
 start_chars = set(['(', '{', '['])
 end_chars = set([')', '}', ']'])
 
@@ -74,6 +77,7 @@ def extract_args(bracket_body):
 
     loc = 1
     in_string = False
+    in_comprehension = False
 
     args = []
     current_line = ""
@@ -103,7 +107,13 @@ def extract_args(bracket_body):
 
         in_bracket = any(start <= loc <= stop for start, stop in start_stops)
 
-        if not in_string and not in_bracket and char == ',':
+        if char in start_chars | end_chars:
+            in_comprehension = False
+
+        if not in_string and bracket_body[loc:loc+5] == ' for ':
+            in_comprehension = True
+
+        if not in_string and not in_bracket and not in_comprehension and char == ',':
             if current_line.strip():
                 args.append(current_line.strip())
                 current_line = ""
@@ -114,6 +124,10 @@ def extract_args(bracket_body):
 
     if current_line.strip():
         args.append(current_line.strip())
+
+    # preserve singular tuples
+    if bracket_body[-2:] == ',)': # regex match?
+        args[-1] = args[-1] + ','
 
     return args
 
@@ -151,9 +165,14 @@ def format_source_code(source_code, indent=''):
 def rewrite_bracket(bracket_body, indent, offset):
     args = extract_args(bracket_body)
 
-    condensed = bracket_body[0] + ', '.join(
-        format_source_code(arg) for arg in args if not arg.startswith('#'),
-    ) + bracket_body[-1]
+    # put all of our args on one line to see if it will fit, and move comments
+    # below us
+    condensed = bracket_body[0]
+    condensed += ', '.join(
+        # cleanup newlines in our arg
+        format_source_code(re.sub('\s', ' ', arg).strip()) for arg in args if not arg.startswith('#'),
+    )
+    condensed += bracket_body[-1]
 
     if offset + len(condensed) < 80:
         if any(a.startswith('#') for a in args):
@@ -171,8 +190,23 @@ def rewrite_bracket(bracket_body, indent, offset):
     for arg in args:
         result += indent + '    '
         result += format_source_code(arg, indent + '    ')
-        if not arg.startswith('**') and not arg.startswith('#'):
-            result += ','
+
+        line_end = ','
+
+        # "**kwargs," is a syntax error, as is "*args," if not followed by kwargs.
+        if arg.startswith('*') and arg == args[-1]:
+            line_end = ''
+
+        # comments don't get mutated, and
+        if arg.startswith('#'):
+            line_end = ''
+
+        # "(foo)" can't be expanded to "(foo,)" because that now makes it a
+        # tuple which has different logical implications.
+        if len(args) == 1:
+            line_end = ''
+
+        result += line_end
         result += '\n'
 
     # edge case handling for () at the end of a line
