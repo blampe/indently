@@ -56,7 +56,9 @@ def test_format_source_code_with_complicated_source():
             g=another_function(102, arg=b),
             h="something, something else",
             **kwargs
-        ).filter(something=True).filter(
+        ).filter(
+            something=True,
+        ).filter(
             something_else_really_cray_cray_cray_cray_crazy=True,
         ).all()
 
@@ -82,3 +84,22 @@ def test_format_source_code_with_complicated_source():
     result = lib.format_source_code(lib.format_source_code(source_code))
 
     assert result == expected
+
+def test_format_source_code_with_list_comprehension():
+    source_code = "condensed = bracket_body[0] + ', '.join(format_source_code(arg) for arg in args if not arg.startswith('#')) + bracket_body[-1]"
+    expected = """condensed = bracket_body[0] + ', '.join(
+    format_source_code(arg) for arg in args if not arg.startswith('#'),
+) + bracket_body[
+    -1,
+]"""
+
+    result = lib.format_source_code(source_code)
+
+    assert result == expected
+
+def test_outer_brackets_with_list_comprehension():
+    source_code = "(f('x') for x in xs if not x.z('#'))"
+
+    start, stop = lib.find_outer_brackets(source_code).next()
+
+    assert (start, stop) == (0, len(source_code) - 1)

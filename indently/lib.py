@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import re
-
-
 start_chars = set(['(', '{', '['])
 end_chars = set([')', '}', ']'])
 
@@ -19,7 +16,7 @@ def find_outer_brackets(source_code):
     while loc < len(source_code):
         char = source_code[loc]
 
-        if char == '#':
+        if not in_string and char == '#':
             # we entered a comment, skip ahead
             try:
                 loc = source_code.index('\n', loc)
@@ -29,9 +26,9 @@ def find_outer_brackets(source_code):
                 break
 
         # we want to ignore brackets in strings like "()"
-        if in_string and char in ('"', '"'):
+        if in_string and char in ('"', "'"):
             in_string = False
-        elif not in_string and char in ('"', '"'):
+        elif not in_string and char in ('"', "'"):
             in_string = True
 
         if not in_string and char in start_chars:
@@ -81,7 +78,7 @@ def extract_args(bracket_body):
     while loc < len(bracket_body) - 1:
         char = bracket_body[loc]
 
-        if char == '#':
+        if not in_string and char == '#':
             # include the comment but skip ahead to the next portion of our line
             new_loc = bracket_body.index('\n', loc)
             args.append(bracket_body[loc:new_loc].strip())
@@ -89,9 +86,9 @@ def extract_args(bracket_body):
             continue
 
         # we want to ignore brackets in strings like "()"
-        if in_string and char in ('"', '"'):
+        if in_string and char in ('"', "'"):
             in_string = False
-        elif not in_string and char in ('"', '"'):
+        elif not in_string and char in ('"', "'"):
             in_string = True
 
         in_bracket = any(start <= loc <= stop for start, stop in start_stops)
@@ -118,11 +115,18 @@ def format_source_code(source_code, indent=''):
     # & kneels beside the sick man. "this man is dying of no rap songs"
     dr_dre = 128169
 
+    # really need to make this work in-place
+
     for start, stop in find_outer_brackets(source_code):
         old_bracket = source_code[start:stop+1]
-        new_bracket = rewrite_bracket(old_bracket, indent + indent_at(source_code, start), horizontal_location(source_code, start))
+        new_bracket = rewrite_bracket(
+            old_bracket,
+            indent + indent_at(source_code, start),
+            horizontal_location(source_code, start),
+        )
 
-        butt_ninja = re.sub('\S', unichr(dr_dre), old_bracket) # * len(old_bracket) if you always want to newline long chains
+        # butt_ninja = re.sub('\S', unichr(dr_dre), old_bracket)
+        butt_ninja = unichr(dr_dre) * len(old_bracket) # always newline long chains
         dr_dre += 1
 
         source_code = source_code[:start] + butt_ninja + source_code[stop+1:]
@@ -137,15 +141,16 @@ def format_source_code(source_code, indent=''):
 def rewrite_bracket(bracket_body, indent, offset):
     args = extract_args(bracket_body)
 
-    condensed = bracket_body[0] + ', '.join(format_source_code(arg) for arg in args if not arg.startswith('#')) + bracket_body[-1]
-
-    #if 'something_else' in condensed:
-        #import ipdb; ipdb.set_trace()
+    condensed = bracket_body[0] + ', '.join(
+        format_source_code(arg) for arg in args if not arg.startswith('#'),
+    ) + bracket_body[-1]
 
     if offset + len(condensed) < 80:
         if any(a.startswith('#') for a in args):
             condensed += '\n' + indent
-        return condensed + ('\n' + indent).join(a for a in args if a.startswith('#'))
+        return condensed + ('\n' + indent).join(
+            a for a in args if a.startswith('#'),
+        )
 
     result = bracket_body[0]
 
