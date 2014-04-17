@@ -9,6 +9,7 @@ def find_outer_brackets(source_code):
         return
 
     seen_brackets = []
+    string_context = []
 
     loc = 0
     in_string = False
@@ -27,8 +28,12 @@ def find_outer_brackets(source_code):
 
         # we want to ignore brackets in strings like "()"
         if in_string and char in ('"', "'"):
-            in_string = False
+            # need to handle escaping
+            if char == string_context[-1]:
+                string_context.pop()
+            in_string = bool(string_context)
         elif not in_string and char in ('"', "'"):
+            string_context.append(char)
             in_string = True
 
         if not in_string and char in start_chars:
@@ -72,6 +77,7 @@ def extract_args(bracket_body):
 
     args = []
     current_line = ""
+    string_context = []
 
     start_stops = list(find_outer_brackets(' ' + bracket_body[1:-1]))
 
@@ -87,8 +93,12 @@ def extract_args(bracket_body):
 
         # we want to ignore brackets in strings like "()"
         if in_string and char in ('"', "'"):
-            in_string = False
+            # need to handle escaping
+            if char == string_context[-1]:
+                string_context.pop()
+            in_string = bool(string_context)
         elif not in_string and char in ('"', "'"):
+            string_context.append(char)
             in_string = True
 
         in_bracket = any(start <= loc <= stop for start, stop in start_stops)
