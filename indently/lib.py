@@ -51,9 +51,6 @@ def find_outer_brackets(source_code):
 
 
 def horizontal_location(source_code, loc):
-    #if loc == 511:
-        #import ipdb; ipdb.set_trace()
-        #pass
     try:
         return loc - (source_code.rindex('\n', 0, loc) + 1)
     except ValueError:
@@ -126,7 +123,7 @@ def extract_args(bracket_body):
         args.append(current_line.strip())
 
     # preserve singular tuples
-    if bracket_body[-2:] == ',)': # regex match?
+    if bracket_body[-2:] == ',)' and len(args) == 1: # regex match?
         args[-1] = args[-1] + ','
 
     return args
@@ -170,7 +167,7 @@ def rewrite_bracket(bracket_body, indent, offset):
     condensed = bracket_body[0]
     condensed += ', '.join(
         # cleanup newlines in our arg
-        format_source_code(re.sub('\s', ' ', arg).strip()) for arg in args if not arg.startswith('#'),
+        format_source_code(re.sub('\s+', ' ', arg).strip()) for arg in args if not arg.startswith('#'),
     )
     condensed += bracket_body[-1]
 

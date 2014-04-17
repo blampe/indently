@@ -80,7 +80,7 @@ def test_format_source_code_with_complicated_source():
     # call it twice to clean up long and straggling long lines
     result = lib.format_source_code(lib.format_source_code(source_code))
 
-    assert result == expected
+    assert expected == result
 
 
 def test_find_outer_brackets_with_comment_character_in_list_comprehension():
@@ -103,7 +103,23 @@ def test_format_source_code_preserves_singular_tuples():
 
     result = lib.format_source_code(source_code)
 
-    assert result == expected
+    assert expected == result
+
+def test_format_source_code_doesnt_add_too_many_commas():
+    source_code = """
+                                                                f(a=1, b=2, c=3,)
+    """
+
+    expected = """
+                                                                f(
+                                                                    a=1,
+                                                                    b=2,
+                                                                    c=3,
+                                                                )
+    """
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
 
 
 def test_format_source_code_doesnt_create_singular_suples():
@@ -118,7 +134,7 @@ def test_format_source_code_doesnt_create_singular_suples():
 
     result = lib.format_source_code(source_code)
 
-    assert result == expected
+    assert expected == result
 
 
 def test_format_source_code_doesnt_break_up_implicit_tuple_in_comprehensions():
@@ -141,7 +157,7 @@ def test_format_source_code_doesnt_break_up_implicit_tuple_in_comprehensions():
 
     result = lib.format_source_code(source_code)
 
-    assert result == expected
+    assert expected == result
 
 
 def test_format_source_code_with_sqlalchemy_query():
@@ -162,7 +178,7 @@ def test_format_source_code_with_sqlalchemy_query():
     """
     result = lib.format_source_code(source_code)
 
-    assert result == expected
+    assert expected == result
 
 
 def test_format_source_code_doesnt_add_comma_after_star_args():
@@ -176,7 +192,7 @@ def test_format_source_code_doesnt_add_comma_after_star_args():
     """
     result = lib.format_source_code(source_code)
 
-    assert result == expected
+    assert expected == result
 
 
 def test_format_source_code_repairs_dangling_operators():
@@ -185,7 +201,7 @@ def test_format_source_code_repairs_dangling_operators():
 
     result = lib.format_source_code(source_code)
 
-    assert result == expected
+    assert expected == result
 
 
 def test_string_within_a_string():
@@ -207,4 +223,4 @@ def test_string_within_a_string():
     """
     result = lib.format_source_code(source_code)
 
-    assert result == expected
+    assert expected == result
