@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import re
+import sys
 
 
 start_chars = set(['(', '{', '['])
@@ -216,3 +217,7 @@ def rewrite_bracket(bracket_body, indent, offset):
     result += bracket_body[-1]
 
     return result
+
+
+if __name__ == '__main__':
+    print format_source_code(sys.stdin.read())
