@@ -82,13 +82,16 @@ def extract_args(bracket_body):
 
     start_stops = list(find_outer_brackets(' ' + bracket_body[1:-1]))
 
+    def add_arg(arg):
+        args.append(re.sub('\s+', ' ', arg).strip())
+
     while loc < len(bracket_body) - 1:
         char = bracket_body[loc]
 
         if not in_string and char == '#':
             # include the comment but skip ahead to the next portion of our line
             new_loc = bracket_body.index('\n', loc)
-            args.append(bracket_body[loc:new_loc].strip())
+            add_arg(bracket_body[loc:new_loc])
             loc = new_loc
             continue
 
@@ -112,7 +115,7 @@ def extract_args(bracket_body):
 
         if not in_string and not in_bracket and not in_comprehension and char == ',':
             if current_line.strip():
-                args.append(current_line.strip())
+                add_arg(current_line.strip())
                 current_line = ""
         else:
             current_line += char
@@ -120,10 +123,10 @@ def extract_args(bracket_body):
         loc += 1
 
     if current_line.strip():
-        args.append(current_line.strip())
+        add_arg(current_line.strip())
 
     # preserve singular tuples
-    if bracket_body[-2:] == ',)' and len(args) == 1: # regex match?
+    if re.search(r',\s*\)$', bracket_body) and len(args) == 1:
         args[-1] = args[-1] + ','
 
     return args
@@ -143,7 +146,7 @@ def format_source_code(source_code, indent=''):
         new_bracket = rewrite_bracket(
             old_bracket,
             indent + indent_at(source_code, start),
-            horizontal_location(source_code, start),
+            len(indent) + horizontal_location(source_code, start),
         )
 
         # butt_ninja = re.sub('\S', unichr(dr_dre), old_bracket)
@@ -167,7 +170,7 @@ def rewrite_bracket(bracket_body, indent, offset):
     condensed = bracket_body[0]
     condensed += ', '.join(
         # cleanup newlines in our arg
-        format_source_code(re.sub('\s+', ' ', arg).strip()) for arg in args if not arg.startswith('#'),
+        format_source_code(arg) for arg in args if not arg.startswith('#'),
     )
     condensed += bracket_body[-1]
 

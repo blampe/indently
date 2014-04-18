@@ -95,10 +95,24 @@ def test_format_source_code_preserves_singular_tuples():
     source_code = """
                                                                         foo=('bar',)
     """
-    expected  =   """
+    expected = """
                                                                         foo=(
                                                                             'bar',
                                                                         )
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+def test_format_source_code_preserves_singular_newlined_tuples():
+    source_code = """
+    foo=(
+        'bar',
+    )
+    """
+    expected = """
+    foo=('bar',)
     """
 
     result = lib.format_source_code(source_code)
@@ -204,7 +218,49 @@ def test_format_source_code_repairs_dangling_operators():
     assert expected == result
 
 
-def test_string_within_a_string():
+def test_format_source_code_calculates_line_limit_correctly():
+    source_code = """
+        foo = f(
+            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+            ccccccccccccccccccccccccccccccccccc,
+            ddddddddddddddddddddddddddddddddddd,
+            e=(ffffffffffffffffffffffffffffffff, gggggggggggggggggggggggggggggggg),
+        )
+    """
+    expected = """
+        foo = f(
+            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+            ccccccccccccccccccccccccccccccccccc,
+            ddddddddddddddddddddddddddddddddddd,
+            e=(
+                ffffffffffffffffffffffffffffffff,
+                gggggggggggggggggggggggggggggggg,
+            ),
+        )
+    """
+    result = lib.format_source_code(lib.format_source_code(source_code))
+
+    assert expected == result
+
+
+def test_format_source_code_handles_newlined_args():
+    source_code = """
+        id_to_balance_map = dict((id, currency.ZERO)
+                                for id in payment_account_ids)
+    """
+    expected = """
+        id_to_balance_map = dict(
+            (id, currency.ZERO) for id in payment_account_ids
+        )
+    """
+    result = lib.format_source_code(lib.format_source_code(source_code))
+
+    assert expected == result
+
+
+def test_format_source_code_can_handle_a_string_within_a_string():
     source_code = """
         def foo(self):
             this_should_be_ignored = "(not ' real)"
