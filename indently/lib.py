@@ -175,22 +175,15 @@ def rewrite_bracket(bracket_body, indent, offset):
     )
     condensed += bracket_body[-1]
 
-    if offset + len(condensed) < 80:
-        if any(a.startswith('#') for a in args):
-            condensed += '\n' + indent
-        return condensed + ('\n' + indent).join(
-            a for a in args if a.startswith('#'),
-        )
-
-    result = bracket_body[0]
+    multilined = bracket_body[0]
 
     # edge case handling for () at the end of a line
     if args:
-        result += '\n'
+        multilined += '\n'
 
     for arg in args:
-        result += indent + '    '
-        result += format_source_code(arg, indent + '    ')
+        multilined += indent + '    '
+        multilined += format_source_code(arg, indent + '    ')
 
         line_end = ','
 
@@ -207,16 +200,25 @@ def rewrite_bracket(bracket_body, indent, offset):
         if len(args) == 1:
             line_end = ''
 
-        result += line_end
-        result += '\n'
+        multilined += line_end
+        multilined += '\n'
 
     # edge case handling for () at the end of a line
     if args:
-        result += indent
+        multilined += indent
 
-    result += bracket_body[-1]
+    multilined += bracket_body[-1]
 
-    return result
+    # if you multi-lined your args and they look good, we won't touch them,
+    # even if they can fit within 80 characters.
+    if offset + len(condensed) < 80 and bracket_body != multilined:
+        if any(a.startswith('#') for a in args):
+            condensed += '\n' + indent
+        return condensed + ('\n' + indent).join(
+            a for a in args if a.startswith('#'),
+        )
+
+    return multilined
 
 
 if __name__ == '__main__':

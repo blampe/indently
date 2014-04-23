@@ -108,7 +108,7 @@ def test_format_source_code_preserves_singular_tuples():
 def test_format_source_code_preserves_singular_newlined_tuples():
     source_code = """
     foo=(
-        'bar',
+                'bar',
     )
     """
     expected = """
@@ -277,6 +277,37 @@ def test_format_source_code_can_handle_a_string_within_a_string():
         ):
             pass
     """
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_format_source_code_doesnt_condense_lines_if_already_multilined_correctly():
+    source_code = """
+    foo=dict(
+        BAR=1,
+        BAZ=2,
+    )
+    """
+    expected = source_code
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_format_source_code_doesnt_condense_complicated_query_if_already_formatted_correctly():
+    source_code = """
+        query = query.join(
+            models.MyModel
+        ).join(
+            models.MyOtherModel
+        ).filter(
+            models.MyModel.id == MyOtherModel.my_model_id
+        )
+    """
+    expected = source_code
+
     result = lib.format_source_code(source_code)
 
     assert expected == result
