@@ -6,7 +6,7 @@ from indently import lib
 def test_format_source_code_with_complicated_source():
     source_code = """
         well = foo(100, 2.3, True, this_is_a_really_long_argsdajsasjhdalksdjhalsdjhalskjdhalsjhlasa=1,
-            b=2,e=4, # helo
+            b=2,e=4, # hello
             # this is another comment
             c={
                 '1': 3  # this is a comment, {}
@@ -45,7 +45,7 @@ def test_format_source_code_with_complicated_source():
             this_is_a_really_long_argsdajsasjhdalksdjhalsdjhalskjdhalsjhlasa=1,
             b=2,
             e=4,
-            # helo
+            # hello
             # this is another comment
             # this is a comment, {}
             c={'1': 3},
@@ -282,6 +282,17 @@ def test_format_source_code_can_handle_a_string_within_a_string():
     assert expected == result
 
 
+def test_format_source_code_doesnt_swallow_whitespace_in_strings():
+    source_code = """
+        foo = ('hello   "  "   there')
+    """
+    expected = source_code
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
 def test_format_source_code_doesnt_condense_lines_if_already_multilined_correctly():
     source_code = """
     foo=dict(
@@ -311,3 +322,27 @@ def test_format_source_code_doesnt_condense_complicated_query_if_already_formatt
     result = lib.format_source_code(source_code)
 
     assert expected == result
+
+
+def test_format_source_code_handles_utf8_source():
+    source_code = """
+        foo = {
+                'å': 1}
+    """.decode('utf-8')
+    expected = u"""
+        foo = {'å': 1}
+    """
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_parse_source_handles_string_context_correctly():
+    source_code = "'this shouldn\\'t be two strings'"
+
+    expected = source_code
+
+    result = lib.parse_code(source_code).next()
+
+    assert expected == result.value
+    assert isinstance(result, lib.String)

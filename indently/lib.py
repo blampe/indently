@@ -8,47 +8,106 @@ start_chars = set(['(', '{', '['])
 end_chars = set([')', '}', ']'])
 
 
+class Token(object):
+
+    def __init__(self, value, offset):
+        self.value = value
+        self.offset = offset
+
+    def __repr__(self):
+        return u"%s(%s, %d)" % (
+            self.__class__.__name__,
+            repr(self.value),
+            self.offset,
+        )
+
+
+class String(Token):
+    pass
+
+
+class Comment(Token):
+    pass
+
+
+class Code(Token):
+    pass
+
+
+def parse_code(source_code):
+
+    begin = 0
+    offset = 0
+    current_line = ''
+    string_context = []
+    in_string = False
+
+    while offset < len(source_code):
+        char = source_code[offset]
+        current_line += char
+        in_string = bool(string_context)
+
+        if not in_string and char == '#':
+            # we entered a comment, skip ahead
+            try:
+                comment_end = source_code.index('\n', offset)
+            except ValueError:
+                # the last line is a comment, nothing left to do
+                comment_end = len(source_code) - 1
+
+            if current_line[:-1]:
+                yield Code(current_line[:-1], begin)
+
+            yield Comment(source_code[offset:comment_end + 1], offset)
+            begin = comment_end + 1
+            offset = comment_end + 1
+            current_line = ""
+
+            continue
+
+        # we want to ignore brackets in strings like "()"
+        if in_string and char in ('"', "'") and source_code[offset - 1] != "\\":
+            # need to handle escaping
+            if char == string_context[-1]:
+                string_context.pop()
+
+            if not string_context:
+                yield String(current_line, begin)
+                begin = offset + 1
+                current_line = ''
+
+        elif not in_string and char in ('"', "'"):
+            string_context.append(char)
+
+            if current_line[:-1]:
+                yield Code(current_line[:-1], begin)
+            begin = offset
+            current_line = char
+
+        offset += 1
+
+    if in_string:
+        yield String(current_line, begin)
+    else:
+        yield Code(current_line, begin)
+
+
 def find_outer_brackets(source_code):
     if not any(start_char in source_code for start_char in start_chars):
         return
 
     seen_brackets = []
-    string_context = []
 
-    loc = 0
-    in_string = False
+    for token in (t for t in parse_code(source_code) if isinstance(t, Code)):
+        for idx, char in enumerate(token.value):
+            if char in start_chars:
+                assert source_code[token.offset + idx] == char, token
+                seen_brackets.append(token.offset + idx)
 
-    while loc < len(source_code):
-        char = source_code[loc]
-
-        if not in_string and char == '#':
-            # we entered a comment, skip ahead
-            try:
-                loc = source_code.index('\n', loc)
-                continue
-            except ValueError:
-                # the last line is a comment, nothing left to do
-                break
-
-        # we want to ignore brackets in strings like "()"
-        if in_string and char in ('"', "'"):
-            # need to handle escaping
-            if char == string_context[-1]:
-                string_context.pop()
-            in_string = bool(string_context)
-        elif not in_string and char in ('"', "'"):
-            string_context.append(char)
-            in_string = True
-
-        if not in_string and char in start_chars:
-            seen_brackets.append(loc)
-
-        if not in_string and char in end_chars:
-            start_loc = seen_brackets.pop()
-            if not seen_brackets:
-                yield start_loc, loc
-
-        loc += 1
+            if char in end_chars:
+                start_loc = seen_brackets.pop()
+                if not seen_brackets:
+                    yield start_loc, token.offset + idx
 
 
 def horizontal_location(source_code, loc):
@@ -73,55 +132,49 @@ def indent_at(source_code, loc):
 
 def extract_args(bracket_body):
 
-    loc = 1
-    in_string = False
     in_comprehension = False
 
     args = []
     current_line = ""
-    string_context = []
 
     start_stops = list(find_outer_brackets(' ' + bracket_body[1:-1]))
 
     def add_arg(arg):
-        args.append(re.sub('\s+', ' ', arg).strip())
+        thin_arg = ''
+        for t in parse_code(arg):
+            if isinstance(t, Code):
+                thin_arg += re.sub('\s+', ' ', t.value)
+            else:
+                thin_arg += t.value.strip()
+        args.append(thin_arg)
 
-    while loc < len(bracket_body) - 1:
-        char = bracket_body[loc]
-
-        if not in_string and char == '#':
-            # include the comment but skip ahead to the next portion of our line
-            new_loc = bracket_body.index('\n', loc)
-            add_arg(bracket_body[loc:new_loc])
-            loc = new_loc
+    for token in parse_code(bracket_body[1:-1]):
+        if isinstance(token, Comment):
+            add_arg(token.value)
             continue
 
-        # we want to ignore brackets in strings like "()"
-        if in_string and char in ('"', "'"):
-            # need to handle escaping
-            if char == string_context[-1]:
-                string_context.pop()
-            in_string = bool(string_context)
-        elif not in_string and char in ('"', "'"):
-            string_context.append(char)
-            in_string = True
+        if isinstance(token, String):
+            current_line += token.value
+            continue
 
-        in_bracket = any(start <= loc <= stop for start, stop in start_stops)
+        for idx, char in enumerate(token.value):
+            in_bracket = any(
+                start <= token.offset + idx < stop
+                for start, stop in start_stops
+            )
 
-        if char in start_chars | end_chars:
-            in_comprehension = False
+            if bracket_body[token.offset + idx:token.offset + idx + 5] == ' for ':
+                in_comprehension = True
 
-        if not in_string and bracket_body[loc:loc+5] == ' for ':
-            in_comprehension = True
+            if char in start_chars | end_chars:
+                in_comprehension = False
 
-        if not in_string and not in_bracket and not in_comprehension and char == ',':
-            if current_line.strip():
-                add_arg(current_line.strip())
-                current_line = ""
-        else:
-            current_line += char
-
-        loc += 1
+            if not in_bracket and not in_comprehension and char == ',':
+                if current_line.strip():
+                    add_arg(current_line.strip())
+                    current_line = ""
+            else:
+                current_line += char
 
     if current_line.strip():
         add_arg(current_line.strip())
@@ -141,7 +194,6 @@ def format_source_code(source_code, indent=''):
     dr_dre = 128169
 
     # really need to make this work in-place
-
     for start, stop in find_outer_brackets(source_code):
         old_bracket = source_code[start:stop+1]
         new_bracket = rewrite_bracket(
