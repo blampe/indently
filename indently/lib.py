@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import itertools
 import re
 import sys
+
+LINE_LEN = 79
 
 
 start_chars = set(['(', '{', '['])
@@ -23,7 +26,16 @@ class Token(object):
 
 
 class String(Token):
-    pass
+
+    @property
+    def verbatim(self):
+        return self.value[:3] in ('"""', "'''")
+
+    @property
+    def wrapper(self):
+        if self.value[:3] in ('"""', "'''"):
+            return self.value[:3]
+        return self.value[0]
 
 
 class Comment(Token):
@@ -67,9 +79,14 @@ def parse_code(source_code):
 
         # we want to ignore brackets in strings like "()"
         if in_string and char in ('"', "'") and source_code[offset - 1] != "\\":
-            # need to handle escaping
-            if char == string_context[-1]:
-                string_context.pop()
+            # look ahead and see if we're closing a 3-quote string
+            if source_code[offset:offset + len(string_context[-1])] == string_context[-1]:
+                # if it is a 3-quote string, add those remaining 2 quotes to
+                # the current line. otherwise this a no-op.
+                num_closing_chars = len(string_context.pop())
+                if num_closing_chars == 3:
+                    current_line = current_line[:-1] + current_line[-1] * 3
+                offset += num_closing_chars - 1
 
             if not string_context:
                 yield String(current_line, begin)
@@ -77,18 +94,22 @@ def parse_code(source_code):
                 current_line = ''
 
         elif not in_string and char in ('"', "'"):
-            string_context.append(char)
+            if source_code[offset:offset + 3] in ('"""', "'''"):
+                string_context.append(source_code[offset:offset + 3])
+            else:
+                string_context.append(char)
 
             if current_line[:-1]:
                 yield Code(current_line[:-1], begin)
+
             begin = offset
             current_line = char
 
         offset += 1
 
-    if in_string:
+    if in_string and current_line:
         yield String(current_line, begin)
-    else:
+    elif current_line:
         yield Code(current_line, begin)
 
 
@@ -144,6 +165,13 @@ def extract_args(bracket_body):
         for t in parse_code(arg):
             if isinstance(t, Code):
                 thin_arg += re.sub('\s+', ' ', t.value)
+            elif (
+                    isinstance(t, String)
+                    and not t.verbatim
+                    and re.search('["\']\s+$', thin_arg)
+                    and re.search('["\']\s+$', thin_arg).group()[0] == t.value[0]
+                ):
+                thin_arg = thin_arg[:-len(re.search('["\']\s+$', thin_arg).group())] + t.value[1:]
             else:
                 thin_arg += t.value.strip()
         args.append(thin_arg)
@@ -186,7 +214,75 @@ def extract_args(bracket_body):
     return args
 
 
-def format_source_code(source_code, indent=''):
+def window(seq, n):
+    it = iter(seq)
+    result = tuple(itertools.islice(it, n))
+    if len(result) == n:
+        yield result
+    for elem in it:
+        result = result[1:] + (elem,)
+        yield result
+
+
+def destroy_backslashes(token_stream):
+    to_yield = None
+    next_next = None
+    next = None
+
+    my_window = window(token_stream, 3)
+
+    try:
+        while True:
+            token, next, next_next = my_window.next()
+
+            to_yield = to_yield or token
+
+            if (
+                isinstance(next, Code)
+                and next.value.replace('\\', '').strip() == ''
+                and type(to_yield) == type(next_next)
+            ):
+                if isinstance(to_yield, String):
+                    if to_yield.wrapper == next_next.wrapper:
+                        to_yield = String(
+                            to_yield.value[:-len(to_yield.wrapper)] + next_next.value[len(next_next.wrapper):],
+                            to_yield.offset
+                        )
+                        _, _, next_next = my_window.next()
+                        next = None
+                        continue
+
+                elif isinstance(to_yield, Code):
+                    to_yield = Code(to_yield.value + next_next.value, to_yield.offset)
+                    _, _, next_next = my_window.next()
+                    next = None
+                    continue
+
+            if isinstance(to_yield, Code) and '\\' in to_yield.value:
+                to_yield = Code(re.sub('\\\\\s+', '', to_yield.value), 0)
+                continue
+
+            yield to_yield
+            to_yield = None
+    finally:
+        if to_yield:
+            yield to_yield
+        if next:
+            yield next
+        if next_next:
+            if isinstance(next_next, Code):
+                next_next = Code(re.sub('\\\\\s+', '', next_next.value), next_next.offset)
+            yield next_next
+
+
+def format_source_code(source_code):
+    x = ''.join(t.value for t in destroy_backslashes(parse_code(source_code)))
+    return _format_source_code(
+        x or source_code
+    )
+
+
+def _format_source_code(source_code, indent=''):
     transforms = []
 
     # "let me through i'm a doctor!" says dr dre as he pushes through the crowd
@@ -209,6 +305,20 @@ def format_source_code(source_code, indent=''):
         source_code = source_code[:start] + butt_ninja + source_code[stop+1:]
         transforms.append((butt_ninja, new_bracket))
 
+    if not transforms:
+        for token in parse_code(source_code):
+            if (
+                isinstance(token, String)
+                and not token.verbatim
+                and len(token.value) + len(indent_at(source_code, token.offset)) > LINE_LEN
+                and token.offset < LINE_LEN - 10
+                and source_code != token.value # base case terminates
+            ):
+                # wrap long strings
+                return _format_source_code(
+                    source_code.replace(token.value, '(' + token.value + ')')
+                )
+
     for butt_ninja, new in transforms:
         source_code = source_code.replace(butt_ninja, new)
 
@@ -223,7 +333,7 @@ def rewrite_bracket(bracket_body, indent, offset):
     condensed = bracket_body[0]
     condensed += ', '.join(
         # cleanup newlines in our arg
-        format_source_code(arg) for arg in args if not arg.startswith('#'),
+        _format_source_code(arg) for arg in args if not arg.startswith('#'),
     )
     condensed += bracket_body[-1]
 
@@ -235,7 +345,17 @@ def rewrite_bracket(bracket_body, indent, offset):
 
     for arg in args:
         multilined += indent + '    '
-        multilined += format_source_code(arg, indent + '    ')
+
+        # well this is obvious
+        if arg[0] in ("'", '"') and offset < LINE_LEN - 10 and offset + len(arg) > LINE_LEN:
+            arg = (arg[0] +
+                (arg[0] + '\n' + indent + '    ' + arg[0]).join(
+                    arg[1:-1][i:i + (LINE_LEN - 1) - len(indent) - 4]
+                    for i in xrange(0, len(arg) - 2, (LINE_LEN - 1) - len(indent) - 4)
+                ) + arg[-1]
+            )
+
+        multilined += _format_source_code(arg, indent + '    ')
 
         line_end = ','
 
@@ -263,7 +383,7 @@ def rewrite_bracket(bracket_body, indent, offset):
 
     # if you multi-lined your args and they look good, we won't touch them,
     # even if they can fit within 80 characters.
-    if offset + len(condensed) < 80 and bracket_body != multilined:
+    if offset + len(condensed) < LINE_LEN and bracket_body != multilined:
         if any(a.startswith('#') for a in args):
             condensed += '\n' + indent
         return condensed + ('\n' + indent).join(
@@ -274,4 +394,4 @@ def rewrite_bracket(bracket_body, indent, offset):
 
 
 if __name__ == '__main__':
-    print format_source_code(sys.stdin.read())
+    print format_source_code(sys.stdin.read().decode('utf-8'))

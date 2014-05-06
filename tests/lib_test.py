@@ -93,17 +93,18 @@ def test_find_outer_brackets_with_comment_character_in_list_comprehension():
 
 def test_format_source_code_preserves_singular_tuples():
     source_code = """
-                                                                        foo=('bar',)
+                                                                      foo=('bar',)
     """
     expected = """
-                                                                        foo=(
-                                                                            'bar',
-                                                                        )
+                                                                      foo=(
+                                                                          'bar',
+                                                                      )
     """
 
     result = lib.format_source_code(source_code)
 
     assert expected == result
+
 
 def test_format_source_code_preserves_singular_newlined_tuples():
     source_code = """
@@ -118,6 +119,7 @@ def test_format_source_code_preserves_singular_newlined_tuples():
     result = lib.format_source_code(source_code)
 
     assert expected == result
+
 
 def test_format_source_code_doesnt_add_too_many_commas():
     source_code = """
@@ -324,6 +326,36 @@ def test_format_source_code_doesnt_condense_complicated_query_if_already_formatt
     assert expected == result
 
 
+def test_format_source_code_destroys_backslashes_when_condensing():
+    source_code = """
+        foo = \\
+                1
+        bar = "baz"
+    """
+    expected = """
+        foo = 1
+        bar = "baz"
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_format_source_code_destroys_backslashes_when_multilining():
+    source_code = """
+                                                                    foo = "hello" + \\
+                                                                          "there"
+    """
+    expected = """
+                                                                    foo = "hello" + "there"
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
 def test_format_source_code_handles_utf8_source():
     source_code = """
         foo = {
@@ -337,12 +369,157 @@ def test_format_source_code_handles_utf8_source():
     assert expected == result
 
 
-def test_parse_source_handles_string_context_correctly():
-    source_code = "'this shouldn\\'t be two strings'"
+def test_parse_code_handles_string_context_correctly():
+    source_code = "'''this shouldn\\'t be two strings''' (a=1)"
 
+    expected = "'''this shouldn\\'t be two strings'''"
+
+    result = list(lib.parse_code(source_code))
+
+    assert len(result) == 2
+    assert expected == result[0].value
+    assert source_code[result[1].offset:] == result[1].value
+    assert isinstance(result[0], lib.String)
+    assert isinstance(result[1], lib.Code)
+
+
+def test_format_source_code_handles_string_continuations_in_parens():
+    source_code = """
+        foo = (
+            "abcdefghijklmnopqrstuvwxyz"
+            "abcdefghijklmnopqrstuvwxyz"
+            "abcdefghijklmnopqrstuvwxyz"
+            "abcdefghijklmnopqrstuvwxyz"
+            "abcdefghijklmnopqrstuvwxyz"
+            "abcdefghijklmnopqrstuvwxyz"
+            "abcdefghijklmnopqrstuvwxyz"
+        )
+    """
+    expected = """
+        foo = (
+            "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmn"
+            "opqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzab"
+            "cdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
+        )
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_format_source_code_wraps_long_strings():
+    source_code = """
+        foo = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabcccccccc'
+    """
+    expected = """
+        foo = (
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab'
+            'cccccccc'
+        )
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_format_source_code_wraps_long_strings_but_also_handles_backslashes():
+    source_code = """
+        foo = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabcccccccc' \\
+                'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
+    """
+    expected = """
+        foo = (
+            'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab'
+            'ccccccccdddddddddddddddddddddddddddddddddddddddddddddddddddddddddd'
+            'dddddddddddddddd'
+        )
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_format_source_code_doesnt_kill_strings_that_it_cant_fix():
+    source_code = """
+                                                                                         foo('bar')
+                                                                                         baz = "hi"
+    """
+    expected = """
+                                                                                         foo(
+                                                                                             'bar'
+                                                                                         )
+                                                                                         baz = "hi"
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_format_souce_code_doesnt_wrap_multiline_strings():
+    source_code = """
+        foo = '''aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'''
+    """
     expected = source_code
 
-    result = lib.parse_code(source_code).next()
+    result = lib.format_source_code(source_code)
 
-    assert expected == result.value
-    assert isinstance(result, lib.String)
+    assert expected == result
+
+
+def test_format_source_code_handles_string_continuations_with_backslashes():
+    source_code = """
+        foo = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \\
+    """
+    expected = """
+        foo = (
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        ) """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_destroy_backslashes():
+    source_code = """
+    '''foo'''
+
+    "a" \\
+    "b" \\
+
+    x = y + \\
+            z
+    """
+
+    result = list(lib.destroy_backslashes(lib.parse_code(source_code)))
+
+    assert len(result) == 5
+
+    assert isinstance(result[0], lib.Code)
+    assert isinstance(result[1], lib.String)
+    assert isinstance(result[2], lib.Code)
+    assert isinstance(result[3], lib.String)
+    assert isinstance(result[4], lib.Code)
+
+    assert '"ab"' == result[3].value
+    assert ' x = y + z\n    ' == result[4].value
+
+
+def test_window():
+    assert [
+        ('a', 'b', 'c'),
+        ('b', 'c', 'd'),
+        ('c', 'd', 'e'),
+        ('d', 'e', 'f'),
+    ] == list(lib.window('abcdef', 3))
+
