@@ -1,18 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import pytest
+
 from indently import lib
 
 
 def test_format_source_code_with_complicated_source():
     source_code = """
         well = foo(100, 2.3, True, this_is_a_really_long_argsdajsasjhdalksdjhalsdjhalskjdhalsjhlasa=1,
-            b=2,e=4, # hello
-            # this is another comment
+            b=2,e=4, # comment 1
+            # comment 2
             c={
-                '1': 3  # this is a comment, {}
+                '1': 3  # comment 3, {}
             },
             d=[
-                _ for _ in range(10),],
+                my_thing**2 for my_thing in range(10) if True,],
 
             g=another_function(102,                     arg=b),
                     h="something, something else",
@@ -45,23 +47,18 @@ def test_format_source_code_with_complicated_source():
             this_is_a_really_long_argsdajsasjhdalksdjhalsdjhalskjdhalsjhlasa=1,
             b=2,
             e=4,
-            # hello
-            # this is another comment
-            # this is a comment, {}
+            # comment 1 comment 2 comment 3, {}
             c={'1': 3},
-            d=[_ for _ in range(10)],
+            d=[my_thing**2 for my_thing in range(10) if True,],
             g=another_function(102, arg=b),
             h="something, something else",
             **kwargs
-        ).filter(
-            something=True
-        ).filter(
+        ).filter(something=True).filter(
             something_else_really_cray_cray_cray_cray_crazy=True
         ).all()
 
-        this_should_be_condensed = bar(a=1, c=3, d=5, b=2)
-        # but this comment should be saved
-        # and this one too
+        this_should_be_condensed = bar(a=1, c=3, d=5, b=2,)
+        # but this comment should be saved and this one too
 
         def foo(self):
             \"\"\"(ignored docstring)\"\"\"
@@ -72,11 +69,10 @@ def test_format_source_code_with_complicated_source():
 
         def really_long_function_name_that_will_need_to_be_shortened_aaaaaaaaaaaaaaaaaaaaaaaaaa(
             same,
-            signature,
+            signature
         ):
             pass
     """
-
     # call it twice to clean up long and straggling long lines
     result = lib.format_source_code(lib.format_source_code(source_code))
 
@@ -138,13 +134,14 @@ def test_format_source_code_doesnt_add_too_many_commas():
     assert expected == result
 
 
-def test_format_source_code_doesnt_create_singular_suples():
+def test_format_source_code_doesnt_create_singular_tuples():
     source_code = """
     if (first_condition or second_condition) and (third_condition or fourth_condition):
     """
     expected = """
     if (first_condition or second_condition) and (
-        third_condition or fourth_condition
+        third_condition
+        or fourth_condition
     ):
     """
 
@@ -155,22 +152,15 @@ def test_format_source_code_doesnt_create_singular_suples():
 
 def test_format_source_code_doesnt_break_up_implicit_tuple_in_comprehensions():
     source_code = """
-        (sum(x, y, z) for x, y, z in [(1, 2, 3), (4, 5, 6)] if (True and True and ' for '))
+        (sum(x, y, z) for x, y, z in [(1, 2, 3), (4, 5, 6)] if (True and True and ' for ' and not False))
     """
     expected = """
         (
-            sum(x, y, z) for x, y, z in [(1, 2, 3), (4, 5, 6)] if (
-                True and True and ' for '
-            )
+            sum(x, y, z)
+            for x, y, z in [(1, 2, 3), (4, 5, 6)]
+            if (True and True and ' for ' and not False)
         )
     """
-    # i might prefer something like this
-    #(
-        #sum(x, y, z) for (
-            #x, y, z,
-        #) in [(1, 2, 3), (4, 5, 6)])
-    #)
-
     result = lib.format_source_code(source_code)
 
     assert expected == result
@@ -185,7 +175,7 @@ def test_format_source_code_with_sqlalchemy_query():
     models.Membership.objects.filter(
         account__in=owner,
         active=True,
-        created__lte='2014-01-01',
+        created__lte='2014-01-01'
     ).select_related(
         'user'
     ).distinct().order_by(
@@ -220,7 +210,7 @@ def test_format_source_code_repairs_dangling_operators():
     assert expected == result
 
 
-def test_format_source_code_calculates_line_limit_correctly():
+def test_format_source_code_correctly_calculates_line_limit_with_nesting():
     source_code = """
         foo = f(
             aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
@@ -238,7 +228,7 @@ def test_format_source_code_calculates_line_limit_correctly():
             ddddddddddddddddddddddddddddddddddd,
             e=(
                 ffffffffffffffffffffffffffffffff,
-                gggggggggggggggggggggggggggggggg,
+                gggggggggggggggggggggggggggggggg
             ),
         )
     """
@@ -254,7 +244,8 @@ def test_format_source_code_handles_newlined_args():
     """
     expected = """
         id_to_balance_map = dict(
-            (id, currency.ZERO) for id in payment_account_ids
+            (id, currency.ZERO)
+            for id in payment_account_ids
         )
     """
     result = lib.format_source_code(lib.format_source_code(source_code))
@@ -297,7 +288,7 @@ def test_format_source_code_doesnt_swallow_whitespace_in_strings():
 
 def test_format_source_code_doesnt_condense_lines_if_already_multilined_correctly():
     source_code = """
-    foo=dict(
+    foo = dict(
         BAR=1,
         BAZ=2,
     )
@@ -381,6 +372,43 @@ def test_parse_code_handles_string_context_correctly():
     assert source_code[result[1].offset:] == result[1].value
     assert isinstance(result[0], lib.String)
     assert isinstance(result[1], lib.Code)
+
+
+def test_parse_code_handles_regex_string_context_correctly():
+    source_code = """
+        (
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            and re.search('["\\']\s+$', thin_arg)
+        )
+    """
+    result = list(lib.parse_code(source_code))
+
+    assert len(result) == 5
+    assert isinstance(result[0], lib.Code)
+    assert isinstance(result[1], lib.String)
+    assert isinstance(result[2], lib.Code)
+    assert isinstance(result[3], lib.String)
+    assert isinstance(result[4], lib.Code)
+
+    assert """'["\\']\s+$'""" == result[3].value
+
+
+def test_parse_code_handles_double_backslashes():
+    source_code = """
+        next.value.replace('\\\\', '').strip() == ''
+    """
+    result = list(lib.parse_code(source_code))
+
+    assert len(result) == 7
+    assert isinstance(result[0], lib.Code)
+    assert isinstance(result[1], lib.String)
+    assert isinstance(result[2], lib.Code)
+    assert isinstance(result[3], lib.String)
+    assert isinstance(result[4], lib.Code)
+    assert isinstance(result[5], lib.String)
+    assert isinstance(result[6], lib.Code)
+
+    assert "'\\\\'" == result[1].value
 
 
 def test_format_source_code_handles_string_continuations_in_parens():
@@ -523,3 +551,182 @@ def test_window():
         ('d', 'e', 'f'),
     ] == list(lib.window('abcdef', 3))
 
+
+def test_tertiary_continuation():
+    source_code = """
+                                                    a = (True if some_long_condition else False)
+    """
+    expected = """
+                                                    a = (
+                                                        True
+                                                        if some_long_condition
+                                                        else False
+                                                    )
+    """
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_inline_comment_continuation():
+    source_code = """
+                                                        # this is a comment that should be broken up
+    """
+    expected = """
+                                                        # this is a comment
+                                                        # that should be broken
+                                                        # up
+    """
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_inline_comment_continuation_with_code():
+    source_code = """
+                    (foo=True)                          # this is a comment that should be broken up
+    """
+    expected = """
+                    (foo=True)                          # this is a comment
+                                                        # that should be broken
+                                                        # up
+    """
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_inline_comment_continuation_doesnt_break_after_the_page_ends():
+    source_code = """
+                                 foo                                             # this is a comment that should be broken up
+    """
+    expected = """
+                                 foo                                             # this is a
+                                                                                 # comment that
+                                                                                 # should be broken
+                                                                                 # up
+    """
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_inline_comment_continuation_preserves_blocks():
+    source_code = """
+        # this is a comment block
+        #
+        # this is another comment block that runs on for a while and should be shortened
+        #
+        # this is a third comment block, it should be untouched
+    """
+    expected = """
+        # this is a comment block
+        #
+        # this is another comment block that runs on for a while and should be
+        # shortened
+        #
+        # this is a third comment block, it should be untouched
+    """
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_commented_code_is_not_compacted():
+    source_code = """
+                #if arg.startswith('and '):
+                    #line_end = ''
+                    #import ipdb; ipdb.set_trace()
+                    #pass
+
+                # "(foo)" can't be expanded to "(foo,)" because that now makes it a tuple which has different logical implications.
+
+                foo = True
+
+                # another long comment another long comment another long comment another long comment
+    """
+    expected = """
+                #if arg.startswith('and '):
+                    #line_end = ''
+                    #import ipdb; ipdb.set_trace()
+                    #pass
+
+                # "(foo)" can't be expanded to "(foo,)" because that now makes
+                # it a tuple which has different logical implications.
+
+                foo = True
+
+                # another long comment another long comment another long
+                # comment another long comment
+    """
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_dogfood():
+    source_code = """
+        def add_arg(arg):
+            thin_arg = ''
+            for t in parse_code(arg):
+                if isinstance(t, Code):
+                    thin_arg += re.sub('\s+', ' ', t.value)
+                elif (
+                        isinstance(t, String)
+                        and not t.verbatim
+                        and re.search('["\\']\s+$', thin_arg)
+                        and re.search('["\\']\s+$', thin_arg).group()[0] == t.value[0]
+                    ):
+                    thin_arg = thin_arg[:-len(re.search('["\\']\s+$', thin_arg).group())] + t.value[1:]
+                else:
+                    thin_arg += t.value.strip()
+            args.append(thin_arg)
+    """
+
+    expected = """
+        def add_arg(arg):
+            thin_arg = ''
+            for t in parse_code(arg):
+                if isinstance(t, Code):
+                    thin_arg += re.sub('\s+', ' ', t.value)
+                elif (
+                    isinstance(t, String)
+                    and not t.verbatim
+                    and re.search('["\\']\s+$', thin_arg)
+                    and re.search('["\\']\s+$', thin_arg).group()[0] == t.value[
+                        0
+                    ]
+                ):
+                    thin_arg = thin_arg[
+                        :-len(re.search('["\\']\s+$', thin_arg).group())
+                    ] + t.value[
+                        1:
+                    ]
+                else:
+                    thin_arg += t.value.strip()
+            args.append(thin_arg)
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_string_dict_keys():
+    source_code = """
+        formatted_dict = {
+            "foofoofoofoo": BarBarBarBarBarBarBar.baz(bizzbizzbizzbizzbizzbizzbizz)
+        }
+    """
+
+    expected = """
+        formatted_dict = {
+            "foofoofoofoo": BarBarBarBarBarBarBar.baz(
+                bizzbizzbizzbizzbizzbizzbizz
+            )
+        }
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result

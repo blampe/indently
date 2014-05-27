@@ -1,9 +1,10 @@
 Indently
 ========
 
-A tool to apply consistent indentation to your Python code.
+A tool to apply consistent indentation and formatting to your Python code.
 
-This is still very much a work in progress.
+This is still **very much** a work in progress. In addition to being full of
+hacks, the source might look weird because the tool is used to format itself.
 
 
 Example
@@ -55,6 +56,6 @@ Usage
 -----
 
 ```shell
-$ cat code.py | importly/lib.py
+$ cat code.py | indently
 ```
 
