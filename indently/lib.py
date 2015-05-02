@@ -267,10 +267,10 @@ def extract_args(bracket_body):
                 not in_bracket
                 and not in_comprehension
                 and (
-                    token.value[idx:idx+5].startswith(' and ')
-                    or token.value[idx:idx+4].startswith(' or ')
-                    or token.value[idx:idx+6].startswith(' else ')
-                    or token.value[idx:idx+4].startswith(' if ')
+                    re.match(r'^\s+and\s+', token.value[idx:])
+                    or re.match(r'^\s+or\s+', token.value[idx:])
+                    or re.match(r'^\s+else\s+', token.value[idx:])
+                    or re.match(r'^\s+if\s+', token.value[idx:])
                 )
             ):
                 if current_line.strip():

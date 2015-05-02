@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import pytest
-
 from indently import lib
 
 
@@ -725,6 +723,57 @@ def test_string_dict_keys():
                 bizzbizzbizzbizzbizzbizzbizz
             )
         }
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+
+def test_run_on_boolean_expressions():
+    source_code = """
+        if (
+            model.check_current_password(user_uuid, password, error_on_404=False) or
+            model.check_password_against_previous_passwords(user_uuid, password)
+        ):
+    """
+
+    expected = """
+        if (
+            model.check_current_password(
+                user_uuid,
+                password,
+                error_on_404=False
+            )
+            or model.check_password_against_previous_passwords(
+                user_uuid,
+                password
+            )
+        ):
+    """
+
+    result = lib.format_source_code(source_code)
+
+    assert expected == result
+
+
+def test_long_boolean_expressions_that_fit_within_line_limit():
+    source_code = """
+    if (
+        model.check_current_password(user_uuid, password, error_on_404=False) or
+        model.check_password_against_previous_passwords(user_uuid, password)
+    ):
+    """
+
+    expected = """
+    if (
+        model.check_current_password(user_uuid, password, error_on_404=False)
+        or model.check_password_against_previous_passwords(
+            user_uuid,
+            password
+        )
+    ):
     """
 
     result = lib.format_source_code(source_code)
