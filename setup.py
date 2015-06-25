@@ -26,9 +26,13 @@ setup(
     name='indently',
     version='0.0.1',
     author='Bryce Lampe',
-    description='Tool to automatically format Python code..',
+    description='Tool to automatically format Python code.',
     packages=['indently'],
-    scripts=['bin/indently'],
+    entry_points={
+        'console_scripts': [
+            'indently = indently.script:main',
+        ]
+    },
     requires=[],
     tests_require=[
         'tox',
