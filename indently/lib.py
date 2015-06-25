@@ -122,9 +122,8 @@ def parse_code(source_code):
         # we want to ignore brackets in strings like "()"
         if (
             in_string
+            # ignore escaped quotes but a double slash \\ doesn't escape us
             and char in ('"', "'")
-            # ignore escaped quotes
-            # but a double slash \\ doesn't escape us
             and (
                 source_code[offset - 1] != "\\"
                 or source_code[offset - 2:offset] == "\\\\"
@@ -409,8 +408,8 @@ def _format_source_code(source_code, indent=''):
                 and len(token.value) + len(
                     indent_at(source_code, token.offset)
                 ) > LINE_LEN
-                and token.offset < LINE_LEN - 10
                 # base case terminates
+                and token.offset < LINE_LEN - 10
                 and source_code != token.value
             ):
                 return _format_source_code(

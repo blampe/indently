@@ -1,5 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import os
+
+import pytest
+
 from indently import lib
 
 
@@ -779,3 +783,9 @@ def test_long_boolean_expressions_that_fit_within_line_limit():
     result = lib.format_source_code(source_code)
 
     assert expected == result
+
+
+@pytest.mark.xfail
+def test_dogfood():
+    """We should pass all flake8 rules"""
+    assert os.popen('flake8 indently').read() == ''
